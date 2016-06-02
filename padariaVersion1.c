@@ -10,32 +10,87 @@
 #include <semaphore.h>
 
 #define N 3 // Numero de atendentes
-#define M 5 // Numero de clientes
+#define M 20 // Numero de clientes
+// TODO: Pensar nos outros semáforos
+
+sem_t em_retirarSenha, em_chamarCliente, atendentes, clientes;
+int proximaSenha, proximoCliente;
+
+void *Atendentes(void *arg){
+	int pid = * (int *) arg;
+	printf("Eu sou o atendente %d e comecei a trabalhar.\n", pid);
+
+	while(1){
+		// Pega senha do próximo cliente
+		sem_wait(&em_chamarCliente);
+		proximoCliente++;
+		sem_post(&em_chamarCliente);
+
+		// Chamo o proximo cliente
+		sem_post(&clientes);
+		
+		// Atende próximo cliente
+		// Finaliza atendimento
+	}
+}
+
+void *Clientes(void *arg){
+	int pid = * (int *) arg;
+	printf("Eu sou o cliente %d e cheguei no estabelecimento.\n", pid);
+
+	// Pegar minha senha
+	sem_wait(&em_retirarSenha);
+	proximaSenha++;
+	sem_post(&em_retirarSenha);
+
+	while(proximaSenha != proximoCliente){
+		sem_post(&clientes);
+	}
+
+	// Cliente é atendido
+	// Cliente vai embora
+}
 
 int main(int argc, char *argv[]) {
-	int i; 
-	pthread_t threads[NTHREADS];
+	int nthreads = N + M;
+	pthread_t threads[nthreads];
+	int i, *pid;
+	proximaSenha=0;
+	proximoCliente=0;
 
-	pthread_mutex_init(&mutex, NULL);
-	pthread_cond_init(&cond_cons, NULL);
-	pthread_cond_init(&cond_prod, NULL);
+	// Inicializando os semáforos
+	sem_init(&em_retirarSenha, 0, 1);
+	sem_init(&em_chamarCliente, 0, 1);
+	sem_init(&em_senha, 0, N);
 
-	for(i=0; i<NTHREADS/2; i++){
-		pthread_create(&threads[i], NULL, Produtora, NULL);
+	// Criando as threads ATENDENTES
+	for (i = 0; i < N; i++){
+		pid = malloc(sizeof(int));
+
+		if(pid == NULL){
+			printf("--ERRO: malloc() em alocação threads\n"); exit(-1);
+		}
+		*pid = i;
+
+		pthread_create(&threads[i], NULL, Atendentes, (void *) pid);
 	}
-	
-	for(i=NTHREADS/2; i<NTHREADS; i++){
-		pthread_create(&threads[i], NULL, Consumidora, NULL);
+
+	// Criando as threads CLIENTES
+	for (i = N; i < nthreads; i++){
+		pid = malloc(sizeof(int));
+
+		if(pid == NULL){
+			printf("--ERRO: malloc() em alocação threads\n"); exit(-1);
+		}
+		*pid = i;
+
+		pthread_create(&threads[i], NULL, Clientes, (void *) pid);
 	}
 
-	for (i = 0; i < NTHREADS; i++) {
+	// Esperando todas terminarem
+	for (i = 0; i < nthreads; i++) {
 		pthread_join(threads[i], NULL);
 	}
-	printf ("*\nFIM\n");
-	
-	pthread_mutex_destroy(&mutex);
-	pthread_cond_destroy(&cond_cons);
-	pthread_cond_destroy(&cond_prod);
-	
+
 	return 0;
 }
