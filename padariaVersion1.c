@@ -10,60 +10,71 @@
 #include <semaphore.h>
 
 #define N 3 // Numero de atendentes
-#define M 20 // Numero de clientes
-// TODO: Pensar nos outros semáforos
+#define M 10 // Numero de clientes
 
-sem_t em_retirarSenha, em_chamarCliente, atendentes, clientes;
-int proximaSenha, proximoCliente;
+pthread_mutex_t em_senhaAtual, em_proximaSenha;
+pthread_cond_t fila, clientes;
+
+int proximaSenha, senhaAtual;
 
 void *Atendentes(void *arg){
 	int pid = * (int *) arg;
 	printf("Eu sou o atendente %d e comecei a trabalhar.\n", pid);
 
 	while(1){
-		// Pega senha do próximo cliente
-		sem_wait(&em_chamarCliente);
-		proximoCliente++;
-		sem_post(&em_chamarCliente);
-
-		// Chamo o proximo cliente
-		sem_post(&clientes);
+		pthread_mutex_lock(&em_proximaSenha);
+		while(proximaSenha == senhaAtual){
+			printf("Eu sou o atendente %d e estou esperando um cliente.\n", pid);
+			pthread_cond_wait(&clientes, &em_proximaSenha);
+		}
+		pthread_mutex_unlock(&em_proximaSenha);
 		
-		// Atende próximo cliente
-		// Finaliza atendimento
+		printf("Eu sou o atendente %d e tem um cliente!\n", pid);
+		
+		printf("Eu sou o atendente %d e estou chamando o cliente com senha %d.\n", pid, senhaAtual);
+		pthread_cond_broadcast(&fila);
+
+		pthread_mutex_lock(&em_senhaAtual);
+		senhaAtual++;
+		pthread_mutex_unlock(&em_senhaAtual);
+		
+		printf("Eu sou o atendente %d e terminei de atender.\n", pid);
 	}
 }
 
 void *Clientes(void *arg){
-	int pid = * (int *) arg;
-	printf("Eu sou o cliente %d e cheguei no estabelecimento.\n", pid);
+	int minhaSenha, pid = * (int *) arg;
+	printf("Eu sou o cliente %d e cheguei na padaria\n", pid);
 
-	// Pegar minha senha
-	sem_wait(&em_retirarSenha);
+	pthread_mutex_lock(&em_proximaSenha);
+	minhaSenha = proximaSenha;
 	proximaSenha++;
-	sem_post(&em_retirarSenha);
+	pthread_mutex_unlock(&em_proximaSenha);
+	printf("Eu sou o cliente %d e peguei a senha %d\n", pid, minhaSenha);
 
-	while(proximaSenha != proximoCliente){
-		sem_post(&clientes);
+	pthread_cond_signal(&clientes);
+
+	pthread_mutex_lock(&em_senhaAtual);
+	while(minhaSenha != senhaAtual){
+		printf("Eu sou o cliente %d com senha %d não é minha vez\n", pid, minhaSenha);
+		pthread_cond_wait(&fila, &em_proximaSenha);
 	}
+	pthread_mutex_unlock(&em_proximaSenha);
 
-	// Cliente é atendido
-	// Cliente vai embora
+	printf("Eu sou o cliente %d com senha %d e é a minha vez.\n", pid, minhaSenha);
+
+	printf("Eu sou o cliente %d e fui atendido!\n", pid);
+
 }
 
 int main(int argc, char *argv[]) {
-	int nthreads = N + M;
-	pthread_t threads[nthreads];
+	pthread_t atendentes[N];
+	pthread_t clientes[M];
+	
 	int i, *pid;
 	proximaSenha=0;
-	proximoCliente=0;
+	senhaAtual=0;
 
-	// Inicializando os semáforos
-	sem_init(&em_retirarSenha, 0, 1);
-	sem_init(&em_chamarCliente, 0, 1);
-	sem_init(&em_senha, 0, N);
-
-	// Criando as threads ATENDENTES
 	for (i = 0; i < N; i++){
 		pid = malloc(sizeof(int));
 
@@ -72,11 +83,10 @@ int main(int argc, char *argv[]) {
 		}
 		*pid = i;
 
-		pthread_create(&threads[i], NULL, Atendentes, (void *) pid);
+		pthread_create(&atendentes[i], NULL, Atendentes, (void *) pid);
 	}
 
-	// Criando as threads CLIENTES
-	for (i = N; i < nthreads; i++){
+	for (i = 0; i < M; i++){
 		pid = malloc(sizeof(int));
 
 		if(pid == NULL){
@@ -84,13 +94,14 @@ int main(int argc, char *argv[]) {
 		}
 		*pid = i;
 
-		pthread_create(&threads[i], NULL, Clientes, (void *) pid);
+		pthread_create(&clientes[i], NULL, Clientes, (void *) pid);
 	}
 
-	// Esperando todas terminarem
-	for (i = 0; i < nthreads; i++) {
-		pthread_join(threads[i], NULL);
+	for (i = 0; i < M; i++) {
+		pthread_join(clientes[i], NULL);
 	}
+
+	// DESTRUIR TUDO
 
 	return 0;
 }
