@@ -12,68 +12,62 @@
 #define N 3 // Numero de atendentes
 #define M 10 // Numero de clientes
 
-pthread_mutex_t em_senhaAtual, em_proximaSenha;
-pthread_cond_t fila, clientes;
-
-int proximaSenha, senhaAtual;
+sem_t  clientes, foiAtendido;
+pthread_mutex_t mutex;
+pthread_cond_t atendentes;
+int proximoCliente, ultimoCliente;
 
 void *Atendentes(void *arg){
-	int pid = * (int *) arg;
-	printf("Eu sou o atendente %d e comecei a trabalhar.\n", pid);
+	int i, pid = * (int *) arg;
 
 	while(1){
-		pthread_mutex_lock(&em_proximaSenha);
-		while(proximaSenha == senhaAtual){
-			printf("Eu sou o atendente %d e estou esperando um cliente.\n", pid);
-			pthread_cond_wait(&clientes, &em_proximaSenha);
-		}
-		pthread_mutex_unlock(&em_proximaSenha);
-		
-		printf("Eu sou o atendente %d e tem um cliente!\n", pid);
-		
-		printf("Eu sou o atendente %d e estou chamando o cliente com senha %d.\n", pid, senhaAtual);
-		pthread_cond_broadcast(&fila);
+		printf("Eu sou o atendente %d e estou esperando um cliente.\n", pid);
+		sem_wait(&clientes);
+		printf("Eu sou o atendente %d e tem cliente!\n", pid);
 
-		pthread_mutex_lock(&em_senhaAtual);
-		senhaAtual++;
-		pthread_mutex_unlock(&em_senhaAtual);
-		
-		printf("Eu sou o atendente %d e terminei de atender.\n", pid);
+		pthread_mutex_lock(&mutex);
+		printf("Eu sou o atendente %d e chamo o cliente %d!\n", pid, proximoCliente);
+		pthread_cond_broadcast(&atendentes);
+		sem_post(&foiAtendido);
+		proximoCliente++;
+		pthread_mutex_unlock(&mutex);
 	}
 }
 
 void *Clientes(void *arg){
-	int minhaSenha, pid = * (int *) arg;
-	printf("Eu sou o cliente %d e cheguei na padaria\n", pid);
+	int pid = * (int *) arg;
 
-	pthread_mutex_lock(&em_proximaSenha);
-	minhaSenha = proximaSenha;
-	proximaSenha++;
-	pthread_mutex_unlock(&em_proximaSenha);
-	printf("Eu sou o cliente %d e peguei a senha %d\n", pid, minhaSenha);
+	
 
-	pthread_cond_signal(&clientes);
-
-	pthread_mutex_lock(&em_senhaAtual);
-	while(minhaSenha != senhaAtual){
-		printf("Eu sou o cliente %d com senha %d não é minha vez\n", pid, minhaSenha);
-		pthread_cond_wait(&fila, &em_proximaSenha);
+	pthread_mutex_lock(&mutex);
+	while(pid != proximoCliente){
+		//printf("Eu sou o cliente %d e NÃO é minha vez\n", pid);	
+		pthread_cond_wait(&atendentes, &mutex);
 	}
-	pthread_mutex_unlock(&em_proximaSenha);
+	pthread_mutex_unlock(&mutex);
+	sem_post(&clientes);
+	sem_wait(&foiAtendido);
+	
 
-	printf("Eu sou o cliente %d com senha %d e é a minha vez.\n", pid, minhaSenha);
 
-	printf("Eu sou o cliente %d e fui atendido!\n", pid);
 
+	printf("Eu sou o cliente %d e é minha vez\n", pid);	
+	
+
+	printf("Eu sou o cliente %d e saí na padaria\n", pid);
+	
 }
 
 int main(int argc, char *argv[]) {
-	pthread_t atendentes[N];
-	pthread_t clientes[M];
+	pthread_t atend[N];
+	pthread_t cli[M];
 	
 	int i, *pid;
-	proximaSenha=0;
-	senhaAtual=0;
+	// proximoCliente=0;
+	ultimoCliente=0;
+
+	sem_init(&clientes, 0, 0);
+	sem_init(&foiAtendido, 0, 0);
 
 	for (i = 0; i < N; i++){
 		pid = malloc(sizeof(int));
@@ -83,7 +77,7 @@ int main(int argc, char *argv[]) {
 		}
 		*pid = i;
 
-		pthread_create(&atendentes[i], NULL, Atendentes, (void *) pid);
+		pthread_create(&atend[i], NULL, Atendentes, (void *) pid);
 	}
 
 	for (i = 0; i < M; i++){
@@ -94,11 +88,11 @@ int main(int argc, char *argv[]) {
 		}
 		*pid = i;
 
-		pthread_create(&clientes[i], NULL, Clientes, (void *) pid);
+		pthread_create(&cli[i], NULL, Clientes, (void *) pid);
 	}
 
 	for (i = 0; i < M; i++) {
-		pthread_join(clientes[i], NULL);
+		pthread_join(cli[i], NULL);
 	}
 
 	// DESTRUIR TUDO
