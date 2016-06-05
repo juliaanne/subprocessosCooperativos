@@ -19,8 +19,7 @@ int proximoCliente, ultimoCliente;
 
 void *Atendentes(void *arg){
 	int i, pid = * (int *) arg;
-	proximoCliente = pid; // Incrementa próximo cliente
-	
+
 	while(1){
 		sem_wait(&clientes); // Espera ter clientes
 		printf("Tem clientes na padaria!\n");
@@ -32,6 +31,8 @@ void *Atendentes(void *arg){
 		
 		sem_post(&foiChamado); // Avisa que foi chamado
 		
+		proximoCliente++; // Incrementa próximo cliente
+
 		pthread_mutex_unlock(&mutex);
 	}
 }
@@ -39,12 +40,9 @@ void *Atendentes(void *arg){
 void *Clientes(void *arg){
 	int pid = * (int *) arg;
 
-	printf("Eu sou o cliente %d\n", pid);	
-
 	pthread_mutex_lock(&mutex);
 	while(pid > proximoCliente) {
 		// Enquanto não for sua vez, espera na fila
-		printf("Eu sou o cliente %d e NÃO é a minha vez\n", pid);	
 		pthread_cond_wait(&atendentes, &mutex);
 	}
 	pthread_mutex_unlock(&mutex);
@@ -53,7 +51,6 @@ void *Clientes(void *arg){
 	
 	sem_wait(&foiChamado); // Espera ser chamado pelo atendente
 	printf("Eu sou o cliente %d e é minha vez\n", pid);	
-	printf("Cliente %d foi embora\n", pid);	
 }
 
 int main(int argc, char *argv[]) {
