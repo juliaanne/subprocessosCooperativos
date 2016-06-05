@@ -1,8 +1,6 @@
 /* Disciplina: Sistemas Operacionais 1 */
 /* Prof.: Valeria Bastos */
-/* Primeiro trabalho */
-/* Julia Anne */
-/* Tayssa Vandelli */
+/* Exercício 7.b */
 
 #include <stdio.h>
 #include <stdlib.h> 
