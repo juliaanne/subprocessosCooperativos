@@ -13,7 +13,7 @@
 sem_t clientes, foiChamado;
 pthread_mutex_t mutex;
 pthread_cond_t atendentes;
-int proximoCliente, ultimoCliente;
+int proximoCliente;
 
 void *Atendentes(void *arg){
 	int i, pid = * (int *) arg;
@@ -24,14 +24,12 @@ void *Atendentes(void *arg){
 
 		pthread_mutex_lock(&mutex);
 		printf("Eu sou o atendente %d e chamo o cliente %d!\n", pid, proximoCliente);
+		proximoCliente++; // Incrementa próximo cliente
+		pthread_mutex_unlock(&mutex);
 
 		pthread_cond_broadcast(&atendentes); // Acorda todos os clientes que esperam por atendentes chamarem
 		
 		sem_post(&foiChamado); // Avisa que foi chamado
-		
-		proximoCliente++; // Incrementa próximo cliente
-
-		pthread_mutex_unlock(&mutex);
 	}
 }
 
@@ -39,7 +37,7 @@ void *Clientes(void *arg){
 	int pid = * (int *) arg;
 
 	pthread_mutex_lock(&mutex);
-	while(pid > proximoCliente) {
+	while(pid != proximoCliente) {
 		// Enquanto não for sua vez, espera na fila
 		pthread_cond_wait(&atendentes, &mutex);
 	}
@@ -48,6 +46,7 @@ void *Clientes(void *arg){
 	sem_post(&clientes); // Avisa que tem cliente esperando
 	
 	sem_wait(&foiChamado); // Espera ser chamado pelo atendente
+	
 	printf("Eu sou o cliente %d e é minha vez\n", pid);	
 }
 
